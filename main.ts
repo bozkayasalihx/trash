@@ -5,6 +5,7 @@ import utc from "dayjs/plugin/utc";
 import "dotenv/config";
 import { Redis } from "ioredis";
 import { Db, Document, FindCursor, MongoClient, WithId } from "mongodb";
+import { connectToMongo } from "./connect";
 import { RawEvent } from "./reader";
 
 dayjs.extend(customParseFormat);
@@ -18,6 +19,7 @@ enum PlatformEnum {
     IOS,
     OTHER,
 }
+
 
 const LIMIT = 200;
 export const CHANNEL = "stream_data";
@@ -123,9 +125,8 @@ export class Aggragator {
             } else if (data.platform === PlatformEnum.IOS.valueOf()) {
                 platform = "ios";
             }
-            const key = `${data.version}::${platform}::${
-                data.network
-            }::${day.valueOf()}::heatmap`;
+            const key = `${data.version}::${platform}::${data.network
+                }::${day.valueOf()}::heatmap`;
             if (!this.bucket.has(key)) {
                 this.bucket.set(key, {
                     _id: {
@@ -170,9 +171,8 @@ export class Aggragator {
 
     private handleCta(data: WithId<Document>, customer: string, game: string) {
         const day = dayjs(data.timestamp).utc().startOf("day").toDate();
-        const key = `${data.version}::${data.os ?? "none"}::${
-            data.network
-        }::${day.valueOf()}::ctaClick`;
+        const key = `${data.version}::${data.os ?? "none"}::${data.network
+            }::${day.valueOf()}::ctaClick`;
         if (!this.bucket.has(key)) {
             this.bucket.set(key, {
                 _id: {
@@ -310,16 +310,24 @@ export class Aggragator {
     public async run() {
         const db = await this.connect();
         await this.allDocs(db);
+        const m = await connectToMongo();
         while (this.queue.length != 0) {
             const cur = this.queue.pop();
             if (!cur) continue;
             let allData: FindCursor<WithId<Document>> = db
                 .collection(cur)
-                .find({});
+                .find({}, { limit: 10 });
             console.log("cur \n", cur);
             console.log("cur data length \n");
             await this.looper(allData, db, (bucket) => {
-                console.log("bucket -> \n", bucket.size);
+                for (let [_, val] of bucket) {
+                    m.insertOne(val).catch(() => {
+                        return m.findOneAndUpdate({ _id: val._id }, { $set: val }, { upsert: true })
+                    }).catch(err => {
+                        console.log("another type of error", err);
+                    })
+                }
+
             });
         }
     }
