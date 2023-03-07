@@ -316,7 +316,7 @@ export class Aggragator {
             if (!cur) continue;
             let allData: FindCursor<WithId<Document>> = db
                 .collection(cur)
-                .find({}, { limit: 10 });
+                .find({}, { limit: 100_000 });
             console.log("cur \n", cur);
             console.log("cur data length \n");
             await this.looper(allData, db, (bucket) => {
