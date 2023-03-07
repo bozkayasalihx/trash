@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7.0-alpine
+    ports:
+      - 6379:6379
+
+    volumes:
+      - redisdata:/var/lib/redis
+
+  mongo:
+    image: mongo
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodata:/data/db
+
+volumes:
+  redisdata: {}
+  mongodata: {}
